@@ -1,19 +1,75 @@
-from rest_framework import serializers
+from django.contrib.auth import get_user_model
 
-from .models import Post, Comment
+from rest_framework import serializers
+from rest_framework.validators import UniqueValidator, UniqueTogetherValidator
+
+from .models import Post, Comment, Group, Follow
+from .validators import FollowUserValidator
+
+User = get_user_model()
 
 
 class PostSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+    author = serializers.SlugRelatedField(
+        slug_field='username', 
+        read_only=True
+    )
 
     class Meta:
-        fields = ('id', 'text', 'author', 'pub_date')
         model = Post
+        fields = '__all__'
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(
+        max_length=200,
+        validators=[
+            UniqueValidator(
+                queryset=Group.objects.all(),
+                message='Такая группа уже существует!'
+            ),            
+        ]
+    )
+
+    class Meta:
+        model = Group
+        fields = '__all__'
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
-
+    author = serializers.SlugRelatedField(
+        slug_field='username',
+        read_only=True,
+    )
+    post = serializers.SlugRelatedField(
+        slug_field='id',
+        read_only=True,   
+    )
+    
     class Meta:
-        fields = ('id', 'author', 'post', 'text', 'created')
         model = Comment
+        fields = '__all__'
+
+
+class FollowSerializer(serializers.ModelSerializer):
+    user = serializers.SlugRelatedField(
+        slug_field='username',
+        default=serializers.CurrentUserDefault(),
+        queryset=User.objects.all(),
+    )
+    following = serializers.SlugRelatedField(
+        slug_field='username',
+        queryset=User.objects.all(),
+    )
+  
+    class Meta:
+        model = Follow
+        fields = ('user', 'following',)
+        validators = (
+            UniqueTogetherValidator(
+                queryset=Follow.objects.all(),
+                fields=('user', 'following'),
+                message='Такая подписка уже существует!'
+            ),
+            FollowUserValidator()
+        )
